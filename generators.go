@@ -15,7 +15,7 @@ func (it *seqIterator) Next() (int, error) {
 // Iterator will generate ints from start with a given step
 func Sequence(start, step int) Iterator[int] {
 	return &seqIterator{
-		value: start,
+		value: start - step,
 		step:  step,
 	}
 }
@@ -48,5 +48,22 @@ func (it *genIterator[T]) Next() (T, error) {
 func Generate[T any](fn func(T) (T, error)) Iterator[T] {
 	return &genIterator[T]{
 		generator: fn,
+	}
+}
+
+// Repeating iterator implementation
+type repeatIterator[T any] struct {
+	value T
+}
+
+func (it *repeatIterator[T]) Next() (T, error) {
+	return it.value, nil
+}
+
+// Function Repeat returns a repeating iterator
+// Iterator will repeat passed value indefinitely
+func Repeat[T any](value T) Iterator[T] {
+	return &repeatIterator[T]{
+		value: value,
 	}
 }

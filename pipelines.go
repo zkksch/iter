@@ -84,3 +84,63 @@ func Limit[T any](it Iterator[T], limit int) Iterator[T] {
 		remain: limit,
 	}
 }
+
+// Pair of values
+type Pair[T, K any] struct {
+	Left  T
+	Right K
+}
+
+// Pairs iterator implementation
+type pairsIterator[T, K any] struct {
+	left  Iterator[T]
+	right Iterator[K]
+}
+
+func (it *pairsIterator[T, K]) Next() (Pair[T, K], error) {
+	left, err := it.left.Next()
+	if err != nil {
+		return Pair[T, K]{}, err
+	}
+	right, err := it.right.Next()
+	if err != nil {
+		return Pair[T, K]{}, err
+	}
+	return Pair[T, K]{
+		Left:  left,
+		Right: right,
+	}, nil
+}
+
+// Function Pairs combines 2 iterators into one that will provide Pair values
+func Pairs[T, K any](left Iterator[T], right Iterator[K]) Iterator[Pair[T, K]] {
+	return &pairsIterator[T, K]{
+		left:  left,
+		right: right,
+	}
+}
+
+// Combine iterator implementation
+type combineIterator[T any] struct {
+	bases []Iterator[T]
+}
+
+func (it *combineIterator[T]) Next() ([]T, error) {
+	values := make([]T, 0, len(it.bases))
+	for _, base := range it.bases {
+		v, err := base.Next()
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, v)
+	}
+	return values, nil
+}
+
+// Function Combine combines several same typed iterators into one that
+// will provide slices as values
+func Combine[T any](iterators ...Iterator[T]) Iterator[[]T] {
+	return &combineIterator[T]{
+		bases: iterators,
+	}
+}
