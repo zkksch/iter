@@ -7,21 +7,17 @@ type filterIterator[T any] struct {
 	fn   func(T) bool
 }
 
-func (it *filterIterator[T]) Next() bool {
-	for it.base.Next() {
-		value, err := it.base.Get()
-		if err != nil {
-			return false
-		}
-		if it.fn(value) {
-			return true
+func (it *filterIterator[T]) Next() (T, error) {
+	var (
+		v   T
+		err error
+	)
+	for v, err = it.base.Next(); err == nil; v, err = it.base.Next() {
+		if it.fn(v) {
+			return v, nil
 		}
 	}
-	return false
-}
-
-func (it *filterIterator[T]) Get() (T, error) {
-	return it.base.Get()
+	return v, err
 }
 
 // Function Filter returns filter pipe
@@ -40,15 +36,11 @@ type mapIterator[T, K any] struct {
 	fn   func(T) (K, error)
 }
 
-func (it *mapIterator[T, K]) Next() bool {
-	return it.base.Next()
-}
-
-func (it *mapIterator[T, K]) Get() (K, error) {
-	original, err := it.base.Get()
+func (it *mapIterator[T, K]) Next() (K, error) {
+	original, err := it.base.Next()
 	if err != nil {
-		var value K
-		return value, err
+		var empty K
+		return empty, err
 	}
 	return it.fn(original)
 }
@@ -69,19 +61,18 @@ type limitIterator[T any] struct {
 	remain int
 }
 
-func (it *limitIterator[T]) Next() bool {
+func (it *limitIterator[T]) Next() (T, error) {
 	if it.remain <= 0 {
-		return false
+		var empty T
+		return empty, ErrStopIt
 	}
-	next := it.base.Next()
-	if next {
+	next, err := it.base.Next()
+	if err == nil {
 		it.remain--
+	} else {
+		it.remain = 0
 	}
-	return next
-}
-
-func (it *limitIterator[T]) Get() (T, error) {
-	return it.base.Get()
+	return next, err
 }
 
 // Function Limit returns limit pipe
@@ -91,56 +82,5 @@ func Limit[T any](it Iterator[T], limit int) Iterator[T] {
 	return &limitIterator[T]{
 		base:   it,
 		remain: limit,
-	}
-}
-
-type Pair[T, K any] struct {
-	Left  T
-	Right K
-}
-
-type pairIterator[T, K any] struct {
-	left    Iterator[T]
-	right   Iterator[K]
-	stopped bool
-}
-
-func (it *pairIterator[T, K]) Next() bool {
-	if it.stopped {
-		return false
-	}
-	left := it.left.Next()
-	right := it.right.Next()
-	next := left && right
-	it.stopped = !next
-	return next
-}
-
-func (it *pairIterator[T, K]) Get() (Pair[T, K], error) {
-	value := Pair[T, K]{}
-	if it.stopped {
-		return value, ErrStopIt
-	}
-
-	left, err := it.left.Get()
-	if err != nil {
-		return value, err
-	}
-
-	right, err := it.right.Get()
-	if err != nil {
-		return value, err
-	}
-
-	value.Left = left
-	value.Right = right
-
-	return value, nil
-}
-
-func Pairs[T, K any](left Iterator[T], right Iterator[K]) Iterator[Pair[T, K]] {
-	return &pairIterator[T, K]{
-		left:  left,
-		right: right,
 	}
 }

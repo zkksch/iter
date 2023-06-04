@@ -73,6 +73,65 @@ func slicePipe(s []int) (int, error) {
 	return result, nil
 }
 
+func sliceChan[T any](s []T) <-chan T {
+	result := make(chan T)
+	go func() {
+		defer close(result)
+		for _, el := range s {
+			result <- el
+		}
+	}()
+	return result
+}
+
+func filterChan[T any](c <-chan T, fn func(T) bool) <-chan T {
+	result := make(chan T)
+	go func() {
+		defer close(result)
+		for el := range c {
+			if fn(el) {
+				result <- el
+			}
+		}
+	}()
+	return result
+}
+
+func mapChan[T, K any](c <-chan T, fn func(T) (K, error)) <-chan K {
+	result := make(chan K)
+	go func() {
+		defer close(result)
+		for el := range c {
+			v, err := fn(el)
+			if err != nil {
+				return
+			}
+			result <- v
+		}
+	}()
+	return result
+}
+
+func cntChan[T any](c <-chan T, fn func(T) bool) int {
+	var cnt int
+	for el := range c {
+		if fn(el) {
+			cnt++
+		}
+	}
+
+	return cnt
+}
+
+func chanPipe(s []int) (int, error) {
+	sch := sliceChan[int](s)
+	sch = filterChan[int](sch, func(i int) bool { return i%2 == 0 })
+	sch = mapChan[int, int](sch, func(i int) (int, error) { return i / 2, nil })
+	sch = filterChan[int](sch, func(i int) bool { return i%3 == 0 })
+	sch = mapChan[int, int](sch, func(i int) (int, error) { return i / 3, nil })
+	return cntChan[int](sch, func(i int) bool { return i%5 == 0 }), nil
+}
+
 func iterPipe(s []int) (int, error) {
 	sit := iter.FromSlice[int](s)
 	sit = iter.Filter[int](sit, func(i int) bool { return i%2 == 0 })
@@ -93,7 +152,6 @@ func BenchmarkVs(b *testing.B) {
 		1000,
 		10000,
 		100000,
-		1000000,
 	}
 
 	for _, n := range cases {
@@ -117,6 +175,18 @@ func BenchmarkVs(b *testing.B) {
 		b.Run(fmt.Sprintf("slice pipes-%v", n), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				result, err := slicePipe(data)
+				if err != nil {
+					b.Fatal(err)
+				}
+				if result != valid {
+					b.Fatalf("wrong length of resulting array %v != %v", result, valid)
+				}
+			}
+		})
+
+		b.Run(fmt.Sprintf("chan pipes-%v", n), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				result, err := chanPipe(data)
 				if err != nil {
 					b.Fatal(err)
 				}

@@ -4,19 +4,10 @@ package iter
 // Sequence iterator implementation
 type seqIterator struct {
 	value, step int
-	started     bool
 }
 
-func (it *seqIterator) Next() bool {
-	if it.started {
-		it.value += it.step
-	} else {
-		it.started = true
-	}
-	return true
-}
-
-func (it *seqIterator) Get() (int, error) {
+func (it *seqIterator) Next() (int, error) {
+	it.value += it.step
 	return it.value, nil
 }
 
@@ -32,27 +23,23 @@ func Sequence(start, step int) Iterator[int] {
 // Generating iterator implementation
 type genIterator[T any] struct {
 	generator func(T) (T, error)
-	current   T
-	err       error
+	prev      T
+	stopped   bool
 }
 
-func (it *genIterator[T]) Next() bool {
-	if it.err != nil {
-		return false
+func (it *genIterator[T]) Next() (T, error) {
+	var empty T
+	if it.stopped {
+		return empty, ErrStopIt
 	}
-	value, err := it.generator(it.current)
+
+	value, err := it.generator(it.prev)
 	if err != nil {
-		var empty T
-		it.current = empty
-		it.err = err
-		return false
+		it.stopped = true
+		return empty, err
 	}
-	it.current = value
-	return true
-}
-
-func (it *genIterator[T]) Get() (T, error) {
-	return it.current, it.err
+	it.prev = value
+	return value, nil
 }
 
 // Function Generate returns a generating iterator

@@ -8,18 +8,14 @@ type sliceIterator[T any] struct {
 	cursor int
 }
 
-func (it *sliceIterator[T]) Next() bool {
-	it.cursor++
-	return it.cursor < len(it.slice)
-}
-
-func (it *sliceIterator[T]) Get() (T, error) {
+func (it *sliceIterator[T]) Next() (T, error) {
 	var value T
 	if it.cursor >= it.len {
 		return value, ErrStopIt
 	}
 
 	value = it.slice[it.cursor]
+	it.cursor++
 	return value, nil
 }
 
@@ -29,6 +25,6 @@ func FromSlice[T any](slice []T) Iterator[T] {
 	return &sliceIterator[T]{
 		slice:  slice,
 		len:    len(slice),
-		cursor: -1,
+		cursor: 0,
 	}
 }
