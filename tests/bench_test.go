@@ -210,7 +210,7 @@ func BenchmarkVs(b *testing.B) {
 	}
 
 	for _, n := range cases {
-		gen := iter.Generate[int](func() int { return rand.Intn(n) })
+		gen := iter.Generator[int](func() int { return rand.Intn(n) })
 		gen = iter.Limit[int](gen, n)
 		data, err := iter.ToSlice[int](gen)
 		if err != nil {

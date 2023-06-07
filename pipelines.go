@@ -204,6 +204,9 @@ type combineIterator[T any] struct {
 
 func (it *combineIterator[T]) Next() ([]T, error) {
 	values := make([]T, 0, len(it.sources))
+	if len(it.sources) == 0 {
+		return values, ErrStopIt
+	}
 	for _, base := range it.sources {
 		v, err := base.Next()
 		if err != nil {
@@ -224,6 +227,10 @@ func (it *safeCombineIterator[T]) Next() ([]T, error) {
 	it.Lock()
 	defer it.Unlock()
 	values := make([]T, 0, len(it.sources))
+	if len(it.sources) == 0 {
+		return values, ErrStopIt
+	}
+
 	for _, base := range it.sources {
 		v, err := base.Next()
 		if err != nil {

@@ -37,7 +37,7 @@ func Sequence(start, step int) Iterator[int] {
 // Iterator will generate ints from start with a given step
 func SequenceSafe(start, step int) Iterator[int] {
 	v := &atomic.Int64{}
-	v.Add(-int64(step))
+	v.Add(int64(start - step))
 	return &safeSeqIterator{
 		value: v,
 		step:  int64(step),
@@ -53,9 +53,9 @@ func (it *genIterator[T]) Next() (T, error) {
 	return it.generator(), nil
 }
 
-// Function Generate returns a thread safe generating iterator
+// Function Generator returns a thread safe generating iterator
 // Iterator will generate values by using passed function
-func Generate[T any](fn func() T) Iterator[T] {
+func Generator[T any](fn func() T) Iterator[T] {
 	return &genIterator[T]{
 		generator: fn,
 	}

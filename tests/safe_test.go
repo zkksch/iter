@@ -1,4 +1,4 @@
-// Includes tests for thread safiness of some iterators
+// Includes tests for thread safiness of iterators
 // Only need to check thread safiness of stateful iterators or
 // iterators that combine values from multiple sources
 package tests
@@ -94,7 +94,7 @@ const elements = 100000
 const goroutines = 5
 
 // Tests that iterator with slice source will have
-// same amount of steps as amount of elements in the slice
+// same amount of iterations as amount of elements in the slice
 func TestSafeFromSliceSafe(t *testing.T) {
 	it := iter.FromSliceSafe(make([]int, elements))
 	k := iterateAll(goroutines, it)
@@ -103,7 +103,7 @@ func TestSafeFromSliceSafe(t *testing.T) {
 	}
 }
 
-// Tests that after iterating N steps the next element of iterator will be N
+// Tests sequence iterator, checks that after N iterations the next element of iterator will be N
 func TestSafeSequenceSafe(t *testing.T) {
 	if elements%goroutines != 0 {
 		t.Fatalf(
@@ -120,13 +120,13 @@ func TestSafeSequenceSafe(t *testing.T) {
 		t.Fatal(err)
 	}
 	if next != elements {
-		t.Fatalf("wrong next element %v != %v\n", next, elements+1)
+		t.Fatalf("wrong next element %v != %v\n", next, elements)
 	}
 }
 
-// Tests that limit iterator with limit of N will perfom N steps
+// Tests that limit iterator with limit of N will perfom N iterations
 func TestSafeLimitSafe(t *testing.T) {
-	it := iter.Generate(func() int { return 0 })
+	it := iter.Generator(func() int { return 0 })
 	it = iter.LimitSafe(it, elements)
 	k := iterateAll(goroutines, it)
 	if k != elements {
@@ -137,11 +137,7 @@ func TestSafeLimitSafe(t *testing.T) {
 // Tests that pairs iterator from 2 iterators with the same source
 // will iterate over pairs of the same values
 func TestSafePairsSafe(t *testing.T) {
-	a := 0
-	gen := iter.Generate(func() int {
-		a++
-		return a
-	})
+	gen := iter.Sequence(0, 1)
 	sl, err := iter.ToSlice(iter.Limit(gen, elements))
 	if err != nil {
 		t.Fatal(err)
@@ -167,11 +163,7 @@ func TestSafePairsSafe(t *testing.T) {
 // will iterate over groups of the same values
 func TestSafeCombineSafe(t *testing.T) {
 	n := 5
-	a := 0
-	gen := iter.Generate(func() int {
-		a++
-		return a
-	})
+	gen := iter.Sequence(0, 1)
 	sl, err := iter.ToSlice(iter.Limit(gen, elements))
 	if err != nil {
 		t.Fatal(err)
