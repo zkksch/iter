@@ -5,7 +5,7 @@ import "sync/atomic"
 
 // Slice iterator implementation
 type sliceIterator[T any] struct {
-	slice  []T
+	source []T
 	len    int
 	cursor int
 }
@@ -16,14 +16,14 @@ func (it *sliceIterator[T]) Next() (T, error) {
 		return value, ErrStopIt
 	}
 
-	value = it.slice[it.cursor]
+	value = it.source[it.cursor]
 	it.cursor++
 	return value, nil
 }
 
 // Slice iterator implementation (thread safe)
 type safeSliceIterator[T any] struct {
-	slice   []T
+	source  []T
 	len     int64
 	cursor  *atomic.Int64
 	stopped *atomic.Bool
@@ -41,14 +41,14 @@ func (it *safeSliceIterator[T]) Next() (T, error) {
 		return empty, ErrStopIt
 	}
 
-	return it.slice[cursor], nil
+	return it.source[cursor], nil
 }
 
 // Function FromSlice creates a slice iterator
 // Iterator will get all elements of the slice in order
 func FromSlice[T any](slice []T) Iterator[T] {
 	return &sliceIterator[T]{
-		slice:  slice,
+		source: slice,
 		len:    len(slice),
 		cursor: 0,
 	}
@@ -58,7 +58,7 @@ func FromSlice[T any](slice []T) Iterator[T] {
 // Iterator will get all elements of the slice in order
 func FromSliceSafe[T any](slice []T) Iterator[T] {
 	return &safeSliceIterator[T]{
-		slice:   slice,
+		source:  slice,
 		len:     int64(len(slice)),
 		cursor:  &atomic.Int64{},
 		stopped: &atomic.Bool{},

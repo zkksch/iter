@@ -8,8 +8,8 @@ import (
 
 // Filter iterator implementation (thread safe)
 type filterIterator[T any] struct {
-	base Iterator[T]
-	fn   func(T) bool
+	source Iterator[T]
+	fn     func(T) bool
 }
 
 func (it *filterIterator[T]) Next() (T, error) {
@@ -17,7 +17,7 @@ func (it *filterIterator[T]) Next() (T, error) {
 		v   T
 		err error
 	)
-	for v, err = it.base.Next(); err == nil; v, err = it.base.Next() {
+	for v, err = it.source.Next(); err == nil; v, err = it.source.Next() {
 		if it.fn(v) {
 			return v, nil
 		}
@@ -30,19 +30,19 @@ func (it *filterIterator[T]) Next() (T, error) {
 // if a return value is true that element will be included in a resulting iterator
 func Filter[T any](it Iterator[T], fn func(T) bool) Iterator[T] {
 	return &filterIterator[T]{
-		base: it,
-		fn:   fn,
+		source: it,
+		fn:     fn,
 	}
 }
 
 // Map iterator implementation (thread safe)
 type mapIterator[T, K any] struct {
-	base Iterator[T]
-	fn   func(T) (K, error)
+	source Iterator[T]
+	fn     func(T) (K, error)
 }
 
 func (it *mapIterator[T, K]) Next() (K, error) {
-	original, err := it.base.Next()
+	original, err := it.source.Next()
 	if err != nil {
 		var empty K
 		return empty, err
@@ -55,14 +55,14 @@ func (it *mapIterator[T, K]) Next() (K, error) {
 // and includes result of that function in a resulting iterator
 func Map[T, K any](it Iterator[T], fn func(T) (K, error)) Iterator[K] {
 	return &mapIterator[T, K]{
-		base: it,
-		fn:   fn,
+		source: it,
+		fn:     fn,
 	}
 }
 
 // Limit iterator implementation
 type limitIterator[T any] struct {
-	base   Iterator[T]
+	source Iterator[T]
 	remain int
 }
 
@@ -71,7 +71,7 @@ func (it *limitIterator[T]) Next() (T, error) {
 		var empty T
 		return empty, ErrStopIt
 	}
-	next, err := it.base.Next()
+	next, err := it.source.Next()
 	if err == nil {
 		it.remain--
 	} else {
@@ -82,7 +82,7 @@ func (it *limitIterator[T]) Next() (T, error) {
 
 // Limit iterator implementation (thread safe)
 type safeLimitIterator[T any] struct {
-	base    Iterator[T]
+	source  Iterator[T]
 	remain  *atomic.Int64
 	stopped *atomic.Bool
 }
@@ -100,7 +100,7 @@ func (it *safeLimitIterator[T]) Next() (T, error) {
 		it.stopped.Store(true)
 		return empty, ErrStopIt
 	}
-	next, err := it.base.Next()
+	next, err := it.source.Next()
 	if err != nil {
 		it.stopped.Store(true)
 	}
@@ -112,7 +112,7 @@ func (it *safeLimitIterator[T]) Next() (T, error) {
 // only includes n <= limit elements in a resulting iterator
 func Limit[T any](it Iterator[T], limit int) Iterator[T] {
 	return &limitIterator[T]{
-		base:   it,
+		source: it,
 		remain: limit,
 	}
 }
@@ -124,7 +124,7 @@ func LimitSafe[T any](it Iterator[T], limit int) Iterator[T] {
 	v := &atomic.Int64{}
 	v.Add(int64(limit))
 	return &safeLimitIterator[T]{
-		base:    it,
+		source:  it,
 		remain:  v,
 		stopped: &atomic.Bool{},
 	}
@@ -199,12 +199,12 @@ func PairsSafe[T, K any](left Iterator[T], right Iterator[K]) Iterator[Pair[T, K
 
 // Combine iterator implementation
 type combineIterator[T any] struct {
-	bases []Iterator[T]
+	sources []Iterator[T]
 }
 
 func (it *combineIterator[T]) Next() ([]T, error) {
-	values := make([]T, 0, len(it.bases))
-	for _, base := range it.bases {
+	values := make([]T, 0, len(it.sources))
+	for _, base := range it.sources {
 		v, err := base.Next()
 		if err != nil {
 			return nil, err
@@ -217,14 +217,14 @@ func (it *combineIterator[T]) Next() ([]T, error) {
 // Combine iterator implementation (thread safe)
 type safeCombineIterator[T any] struct {
 	sync.Mutex
-	bases []Iterator[T]
+	sources []Iterator[T]
 }
 
 func (it *safeCombineIterator[T]) Next() ([]T, error) {
 	it.Lock()
 	defer it.Unlock()
-	values := make([]T, 0, len(it.bases))
-	for _, base := range it.bases {
+	values := make([]T, 0, len(it.sources))
+	for _, base := range it.sources {
 		v, err := base.Next()
 		if err != nil {
 			return nil, err
@@ -238,7 +238,7 @@ func (it *safeCombineIterator[T]) Next() ([]T, error) {
 // into one iterator that will provide slices as values
 func Combine[T any](iterators ...Iterator[T]) Iterator[[]T] {
 	return &combineIterator[T]{
-		bases: iterators,
+		sources: iterators,
 	}
 }
 
@@ -246,6 +246,6 @@ func Combine[T any](iterators ...Iterator[T]) Iterator[[]T] {
 // into one thread safe iterator that will provide slices as values
 func CombineSafe[T any](iterators ...Iterator[T]) Iterator[[]T] {
 	return &safeCombineIterator[T]{
-		bases: iterators,
+		sources: iterators,
 	}
 }
