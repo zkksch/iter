@@ -82,27 +82,20 @@ func (it *limitIterator[T]) Next() (T, error) {
 
 // Limit iterator implementation (thread safe)
 type safeLimitIterator[T any] struct {
-	source  Iterator[T]
-	remain  *atomic.Int64
-	stopped *atomic.Bool
+	source Iterator[T]
+	remain *atomic.Int64
 }
 
 func (it *safeLimitIterator[T]) Next() (T, error) {
-	stop := it.stopped.Load()
-	if stop {
-		var empty T
-		return empty, ErrStopIt
-	}
-
 	remain := it.remain.Add(-1)
 	if remain < 0 {
 		var empty T
-		it.stopped.Store(true)
+		it.remain.Store(0)
 		return empty, ErrStopIt
 	}
 	next, err := it.source.Next()
 	if err != nil {
-		it.stopped.Store(true)
+		it.remain.Store(0)
 	}
 	return next, err
 }
@@ -124,9 +117,8 @@ func LimitSafe[T any](it Iterator[T], limit int) Iterator[T] {
 	v := &atomic.Int64{}
 	v.Add(int64(limit))
 	return &safeLimitIterator[T]{
-		source:  it,
-		remain:  v,
-		stopped: &atomic.Bool{},
+		source: it,
+		remain: v,
 	}
 }
 

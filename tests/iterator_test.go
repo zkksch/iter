@@ -2,11 +2,13 @@
 package tests
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"math"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/zkksch/iter"
 )
@@ -479,6 +481,73 @@ func TestCombine(t *testing.T) {
 	}
 }
 
+// Tests channel iterator that returns values recieved from channel
+func TestFromChan(t *testing.T) {
+	cases := []struct {
+		source   func() chan int
+		expected []int
+	}{
+		{
+			source: func() chan int {
+				c := make(chan int)
+				go func() {
+					defer close(c)
+					for _, v := range []int{0, 1, 2, 3, 4} {
+						c <- v
+					}
+				}()
+				return c
+			},
+			expected: []int{0, 1, 2, 3, 4},
+		},
+		{
+			source: func() chan int {
+				c := make(chan int)
+				go func() {
+					defer close(c)
+					for _, v := range []int{} {
+						c <- v
+					}
+				}()
+				return c
+			},
+			expected: []int{},
+		},
+	}
+
+	for i, testCase := range cases {
+		c := testCase.source()
+		it := iter.FromChan(context.Background(), c)
+		validateResult(t, i, it, testCase.expected)
+	}
+}
+
+// Tests that channel iterator can be stopped with context
+func TestFromChanClose(t *testing.T) {
+	var c chan int
+	ctx, cancel := context.WithCancel(context.Background())
+	it := iter.FromChan(ctx, c)
+
+	success := make(chan struct{})
+	fail := time.NewTimer(1 * time.Second)
+
+	go func() {
+		it.Next()
+		close(success)
+	}()
+
+	cancel()
+
+	select {
+	case <-success:
+	case <-fail.C:
+		t.Fatal("timeout, iterator is not stopped by context")
+	}
+}
+
+// Tests reduce finalizer
+// Returns reduced value or error if occured
+// If error is ErrStopIt just stops
 func TestReduce(t *testing.T) {
 	newError := errors.New("error")
 	errorIt := iter.Map(iter.FromSlice([]int{1, 2, 3, 4}), func(el int) (int, error) {
@@ -547,6 +616,170 @@ func TestReduce(t *testing.T) {
 		}
 		if result != testCase.expected {
 			t.Fatalf("[%v] result not equal to expected\n%v != %v\n", i, result, testCase.expected)
+		}
+	}
+}
+
+func TestToSliceError(t *testing.T) {
+	newError := errors.New("error")
+	errorIt := iter.Map(iter.FromSlice([]int{0, 1, 2, 3, 4}), func(el int) (int, error) {
+		if el == 3 {
+			return 0, newError
+		}
+		return el, nil
+	})
+	stopIt := iter.Map(iter.FromSlice([]int{0, 1, 2, 3, 4}), func(el int) (int, error) {
+		if el == 3 {
+			return 0, iter.ErrStopIt
+		}
+		return el, nil
+	})
+
+	cases := []struct {
+		iterator iter.Iterator[int]
+		expected []int
+		err      error
+	}{
+		{
+			iterator: errorIt,
+			expected: nil,
+			err:      newError,
+		},
+		{
+			iterator: stopIt,
+			expected: []int{0, 1, 2},
+		},
+	}
+
+	for i, testCase := range cases {
+		result, err := iter.ToSlice(testCase.iterator)
+		if !reflect.DeepEqual(result, testCase.expected) {
+			t.Fatalf("[%v] iterator elements are not equal to expected values\n%v != %v\n",
+				i, result, testCase.expected)
+		}
+		if !errors.Is(err, testCase.err) {
+			t.Fatalf("[%v] unexpected type of error\n%v != %v\n", i, err, testCase.err)
+		}
+	}
+}
+
+// Tests ToChan and ToChanSimple finalizers
+// returns channel that will recieve values from iterator
+func TestToChan(t *testing.T) {
+	cases := []struct {
+		source   []int
+		expected []int
+	}{
+		{
+			source:   []int{},
+			expected: []int{},
+		},
+		{
+			source:   []int{0, 1, 2, 3, 4},
+			expected: []int{0, 1, 2, 3, 4},
+		},
+	}
+
+	for i, testCase := range cases {
+		source := iter.FromSlice(testCase.source)
+		c := iter.ToChan(context.Background(), source)
+		result := make([]int, 0, len(testCase.expected))
+		for v := range c {
+			result = append(result, v)
+		}
+		if !reflect.DeepEqual(result, testCase.expected) {
+			t.Fatalf(
+				"[%v] channel has sent unexpected values\n%v != %v\n",
+				i, result, testCase.expected)
+		}
+	}
+}
+
+func TestToChanCancel(t *testing.T) {
+	it := iter.Generator(func() int { return 1 })
+	ctx, cancel := context.WithCancel(context.Background())
+	c := iter.ToChan(ctx, it)
+
+	success := make(chan struct{})
+	fail := time.NewTimer(1 * time.Second)
+
+	go func() {
+		for range c {
+		}
+		close(success)
+	}()
+
+	cancel()
+
+	select {
+	case <-success:
+	case <-fail.C:
+		t.Fatal("timeout, channel is not closed by context")
+	}
+}
+
+func TestFinal(t *testing.T) {
+	newError := errors.New("error")
+	errorIt := iter.Map(iter.FromSlice([]int{0, 1, 2, 3, 4}), func(el int) (int, error) {
+		if el == 3 {
+			return 0, newError
+		}
+		return el, nil
+	})
+	stopIt := iter.Map(iter.FromSlice([]int{0, 1, 2, 3, 4}), func(el int) (int, error) {
+		if el == 3 {
+			return 0, iter.ErrStopIt
+		}
+		return el, nil
+	})
+
+	cases := []struct {
+		iterator iter.Iterator[int]
+		expected []int
+		err      error
+		stop     error
+	}{
+		{
+			iterator: iter.FromSlice([]int{0, 1, 2, 3, 4}),
+			expected: []int{0, 1, 2, 3, 4},
+			err:      nil,
+			stop:     iter.ErrStopIt,
+		},
+		{
+			// Test error return from source iterator
+			iterator: errorIt,
+			expected: []int{0, 1, 2},
+			err:      newError,
+			stop:     newError,
+		},
+		{
+			// Test stop iteration error from source iterator
+			iterator: stopIt,
+			expected: []int{0, 1, 2},
+			err:      nil,
+			stop:     iter.ErrStopIt,
+		},
+	}
+
+	for i, testCase := range cases {
+		it := iter.Final(testCase.iterator)
+		result := make([]int, 0)
+		for it.Next() {
+			v := it.Get()
+			result = append(result, v)
+		}
+		if !reflect.DeepEqual(result, testCase.expected) {
+			t.Fatalf("[%v] iterator elements are not equal to expected values\n%v != %v\n",
+				i, result, testCase.expected)
+		}
+		if !errors.Is(it.Stop(), testCase.stop) {
+			t.Fatalf("[%v] unexpected stop error\n%v != %v\n", i, it.Stop(), testCase.stop)
+		}
+		if !errors.Is(it.Err(), testCase.err) {
+			t.Fatalf("[%v] unexpected type of error\n%v != %v\n", i, it.Err(), testCase.err)
+		}
+		if it.Next() {
+			t.Fatalf("[%v] iterator should be stopped at that point\n", i)
 		}
 	}
 }

@@ -1,7 +1,10 @@
 // Contains finalizers for iterators
 package iter
 
-import "errors"
+import (
+	"context"
+	"errors"
+)
 
 // Function Reduce takes an iterator, initial value and a function,
 // after that it initializes accumulating value with init value,
@@ -37,6 +40,23 @@ func ToSlice[T any](it Iterator[T]) ([]T, error) {
 		return nil, err
 	}
 	return slice, nil
+}
+
+// Function ToChanSimple makes a channel that will send values from the iterator
+// Ignores errors returned from the iterator
+func ToChan[T any](ctx context.Context, it Iterator[T]) <-chan T {
+	c := make(chan T)
+	go func() {
+		defer close(c)
+		for v, err := it.Next(); err == nil; v, err = it.Next() {
+			select {
+			case c <- v:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return c
 }
 
 // Final iterator, does not implement Iterator interface
