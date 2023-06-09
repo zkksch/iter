@@ -7,7 +7,7 @@ import (
 )
 
 // Function FromSlice creates a slice iterator
-// Iterator will get all elements of the slice in order
+// Iterator returns all elements of the slice
 func FromSlice[T any](source []T) Iterator[T] {
 	cursor := 0
 	return func() (T, error) {
@@ -22,7 +22,7 @@ func FromSlice[T any](source []T) Iterator[T] {
 }
 
 // Function FromSliceSafe creates a thread safe slice iterator
-// Iterator will get all elements of the slice in order
+// Iterator returns all elements of the slice
 func FromSliceSafe[T any](source []T) Iterator[T] {
 	cursor := &atomic.Int64{}
 	l := int64(len(source))
@@ -39,8 +39,8 @@ func FromSliceSafe[T any](source []T) Iterator[T] {
 }
 
 // Function FromChan creates a thread safe iterator from a channel
-// Iterator will return values recieved from the channel
-// and will stop when channel is closed
+// Iterator returns values recieved from the channel
+// and stops when channel is closed
 func FromChan[T any](ctx context.Context, source chan T) Iterator[T] {
 	return func() (T, error) {
 		select {

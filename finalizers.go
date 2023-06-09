@@ -7,9 +7,9 @@ import (
 )
 
 // Function Reduce takes an iterator, initial value and a function,
-// after that it initializes accumulating value with init value,
-// and for each element in an iterator executes function from element value and
-// accumulating value that should return a new accumulating value
+// after that it initializes accumulating value with an init value,
+// and for each element returned by an iterator executes the function
+// from that element and accumulating value after that saves result as new accumulating value
 func Reduce[T, K any](it Iterator[T], init K, fn func(T, K) K) (K, error) {
 	acc := init
 	var (
@@ -26,7 +26,7 @@ func Reduce[T, K any](it Iterator[T], init K, fn func(T, K) K) (K, error) {
 	return acc, nil
 }
 
-// Function ToSlice makes a slice from elements of an iterator
+// Function ToSlice makes a slice from elements returned by an iterator
 func ToSlice[T any](it Iterator[T]) ([]T, error) {
 	slice := make([]T, 0)
 	var (
@@ -42,8 +42,8 @@ func ToSlice[T any](it Iterator[T]) ([]T, error) {
 	return slice, nil
 }
 
-// Function ToChanSimple makes a channel that will send values from the iterator
-// Ignores errors returned from the iterator
+// Function ToChanSimple makes a channel that will send values returned by iterator
+// Ignores errors that was returned by an iterator
 func ToChan[T any](ctx context.Context, it Iterator[T]) <-chan T {
 	c := make(chan T)
 	go func() {
@@ -59,8 +59,8 @@ func ToChan[T any](ctx context.Context, it Iterator[T]) <-chan T {
 	return c
 }
 
-// Final iterator, does not implement Iterator interface
-// Only needed to make using iterators in for loop easier
+// Final iterator, does not implement Iterator "interface"
+// But it easier to iterate over it by using for loop
 type finalIterator[T any] struct {
 	base Iterator[T]
 	last T
@@ -83,13 +83,13 @@ func (it *finalIterator[T]) Get() T {
 }
 
 // Method Stop returns error that caused iterator to stop
-// nil if iterator still active
+// nil if iterator is still active
 func (it *finalIterator[T]) Stop() error {
 	return it.err
 }
 
-// Method Err returns error that caused iterator to stop unexpectedly
-// nil if iterator stopped because stop iteration error or if it's still active
+// Method Err returns an error that caused iterator to stop unexpectedly
+// nil if iterator stopped because base iterator has stopped or if it's still active
 func (it *finalIterator[T]) Err() error {
 	err := it.Stop()
 	if errors.Is(err, ErrStopIt) {
