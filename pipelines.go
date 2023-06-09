@@ -90,6 +90,7 @@ func (it *safeLimitIterator[T]) Next() (T, error) {
 	remain := it.remain.Add(-1)
 	if remain < 0 {
 		var empty T
+		// To prevent access by overflowing int64
 		it.remain.Store(0)
 		return empty, ErrStopIt
 	}
