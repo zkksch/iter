@@ -3,77 +3,40 @@ package iter
 
 import "sync/atomic"
 
-// Sequence iterator implementation
-type seqIterator struct {
-	value, step int
-}
-
-func (it *seqIterator) Next() (int, error) {
-	it.value += it.step
-	return it.value, nil
-}
-
-// Sequence iterator implementation (thread safe)
-type safeSeqIterator struct {
-	value *atomic.Int64
-	step  int64
-}
-
-func (it *safeSeqIterator) Next() (int, error) {
-	value := it.value.Add(it.step)
-	return int(value), nil
-}
-
 // Function Sequence returns a sequence iterator
 // Iterator will generate ints from start with a given step
 func Sequence(start, step int) Iterator[int] {
-	return &seqIterator{
-		value: start - step,
-		step:  step,
+	value := start - step
+	return func() (int, error) {
+		value += step
+		return value, nil
 	}
 }
 
 // Function SequenceSafe returns a thread safe sequence iterator
 // Iterator will generate ints from start with a given step
 func SequenceSafe(start, step int) Iterator[int] {
-	v := &atomic.Int64{}
-	v.Add(int64(start - step))
-	return &safeSeqIterator{
-		value: v,
-		step:  int64(step),
+	value := &atomic.Int64{}
+	value.Add(int64(start - step))
+	step64 := int64(step)
+	return func() (int, error) {
+		v := value.Add(step64)
+		return int(v), nil
 	}
-}
-
-// Generating iterator implementation (thread safe)
-type genIterator[T any] struct {
-	generator func() T
-}
-
-func (it *genIterator[T]) Next() (T, error) {
-	return it.generator(), nil
 }
 
 // Function Generator returns a thread safe generating iterator
 // Iterator will generate values by using passed function
-func Generator[T any](fn func() T) Iterator[T] {
-	return &genIterator[T]{
-		generator: fn,
+func Generator[T any](generator func() T) Iterator[T] {
+	return func() (T, error) {
+		return generator(), nil
 	}
-}
-
-// Repeating iterator implementation (thread safe)
-type repeatIterator[T any] struct {
-	value T
-}
-
-func (it *repeatIterator[T]) Next() (T, error) {
-	return it.value, nil
 }
 
 // Function Repeat returns a thread safe repeating iterator
 // Iterator will repeat passed value indefinitely
 func Repeat[T any](value T) Iterator[T] {
-	return &repeatIterator[T]{
-		value: value,
+	return func() (T, error) {
+		return value, nil
 	}
 }

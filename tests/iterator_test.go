@@ -533,7 +533,7 @@ func TestFromChanClose(t *testing.T) {
 	fail := time.NewTimer(1 * time.Second)
 
 	go func() {
-		_, err := it.Next()
+		_, err := it()
 		if err == nil {
 			failErr <- errors.New("no stop iteration error")
 		} else if !errors.Is(err, iter.ErrStopIt) {

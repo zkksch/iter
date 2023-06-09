@@ -22,7 +22,7 @@ func iterateAll[T any](goroutines int, it iter.Iterator[T]) int {
 			defer wg.Done()
 			<-start
 			a := 0
-			for _, err := it.Next(); err == nil; _, err = it.Next() {
+			for _, err := it(); err == nil; _, err = it() {
 				a++
 			}
 			total.Add(int64(a))
@@ -47,7 +47,7 @@ func iterateN[T any](goroutines int, it iter.Iterator[T], n int) int {
 			<-start
 			a := 0
 			for j := 0; j < n; j++ {
-				_, err := it.Next()
+				_, err := it()
 				if err != nil {
 					break
 				}
@@ -75,7 +75,7 @@ func iterateCheck[T any](goroutines int, it iter.Iterator[T], check func(T) bool
 			defer wg.Done()
 			<-start
 			a := 0
-			for val, err := it.Next(); err == nil; _, err = it.Next() {
+			for val, err := it(); err == nil; _, err = it() {
 				a++
 				if !check(val) {
 					failed.Store(true)
@@ -115,7 +115,7 @@ func TestSafeSequenceSafe(t *testing.T) {
 	if k != elements {
 		t.Fatalf("wrong number of iterations %v != %v\n", elements, k)
 	}
-	next, err := it.Next()
+	next, err := it()
 	if err != nil {
 		t.Fatal(err)
 	}

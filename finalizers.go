@@ -16,7 +16,7 @@ func Reduce[T, K any](it Iterator[T], init K, fn func(T, K) K) (K, error) {
 		v   T
 		err error
 	)
-	for v, err = it.Next(); err == nil; v, err = it.Next() {
+	for v, err = it(); err == nil; v, err = it() {
 		acc = fn(v, acc)
 	}
 	if !errors.Is(err, ErrStopIt) {
@@ -33,7 +33,7 @@ func ToSlice[T any](it Iterator[T]) ([]T, error) {
 		v   T
 		err error
 	)
-	for v, err = it.Next(); err == nil; v, err = it.Next() {
+	for v, err = it(); err == nil; v, err = it() {
 		slice = append(slice, v)
 	}
 	if !errors.Is(err, ErrStopIt) {
@@ -48,7 +48,7 @@ func ToChan[T any](ctx context.Context, it Iterator[T]) <-chan T {
 	c := make(chan T)
 	go func() {
 		defer close(c)
-		for v, err := it.Next(); err == nil; v, err = it.Next() {
+		for v, err := it(); err == nil; v, err = it() {
 			select {
 			case c <- v:
 			case <-ctx.Done():
@@ -73,7 +73,7 @@ func (it *finalIterator[T]) Next() bool {
 	if it.err != nil {
 		return false
 	}
-	it.last, it.err = it.base.Next()
+	it.last, it.err = it.base()
 	return it.err == nil
 }
 
