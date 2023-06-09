@@ -529,17 +529,26 @@ func TestFromChanClose(t *testing.T) {
 	it := iter.FromChan(ctx, c)
 
 	success := make(chan struct{})
+	failErr := make(chan error)
 	fail := time.NewTimer(1 * time.Second)
 
 	go func() {
-		it.Next()
-		close(success)
+		_, err := it.Next()
+		if err == nil {
+			failErr <- errors.New("no stop iteration error")
+		} else if !errors.Is(err, iter.ErrStopIt) {
+			failErr <- err
+		} else {
+			close(success)
+		}
 	}()
 
 	cancel()
 
 	select {
 	case <-success:
+	case err := <-failErr:
+		t.Fatal(err)
 	case <-fail.C:
 		t.Fatal("timeout, iterator is not stopped by context")
 	}

@@ -33,9 +33,10 @@ type safeSliceIterator[T any] struct {
 
 func (it *safeSliceIterator[T]) Next() (T, error) {
 	cursor := it.cursor.Add(1) - 1
-	if cursor >= it.len || cursor < 0 {
+	if cursor >= it.len {
 		var empty T
-		it.cursor.Store(-1)
+		// To prevent access by overflowing int64
+		it.cursor.Store(it.len)
 		return empty, ErrStopIt
 	}
 

@@ -90,8 +90,8 @@ func iterateCheck[T any](goroutines int, it iter.Iterator[T], check func(T) bool
 	return int(total.Load()), failed.Load()
 }
 
-const elements = 100000
-const goroutines = 5
+const elements = 1000000
+const goroutines = 20
 
 // Tests that iterator with slice source will have
 // same amount of iterations as amount of elements in the slice
