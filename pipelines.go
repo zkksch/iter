@@ -2,6 +2,7 @@
 package iter
 
 import (
+	"errors"
 	"sync"
 	"sync/atomic"
 )
@@ -140,7 +141,7 @@ func Combine[T any](iterators ...Iterator[T]) Iterator[[]T] {
 	}
 }
 
-// Function CombineSafe combines several same typed iterators
+// Function CombineSafe combines multiple same typed iterators
 // into one thread safe iterator that returns slices of values combined from all sources
 func CombineSafe[T any](iterators ...Iterator[T]) Iterator[[]T] {
 	var mutex sync.Mutex
@@ -159,5 +160,70 @@ func CombineSafe[T any](iterators ...Iterator[T]) Iterator[[]T] {
 			values = append(values, v)
 		}
 		return values, nil
+	}
+}
+
+// Function Chain combines multiple same typed iterators
+// into one iterator that returns values from those iterators
+func Chain[T any](iterators ...Iterator[T]) Iterator[T] {
+	var (
+		cursor  int
+		stopErr error
+	)
+	return func() (T, error) {
+		var empty T
+		if stopErr != nil {
+			return empty, stopErr
+		}
+
+		for cursor < len(iterators) {
+			it := iterators[cursor]
+			v, err := it()
+			if err != nil {
+				if !errors.Is(err, ErrStopIt) {
+					stopErr = err
+					return empty, err
+				} else {
+					cursor++
+					continue
+				}
+			}
+			return v, nil
+		}
+		return empty, ErrStopIt
+	}
+}
+
+// Function ChainSafe combines multiple same typed iterators
+// into one thread safe iterator that returns values from those iterators
+func ChainSafe[T any](iterators ...Iterator[T]) Iterator[T] {
+	var (
+		cursor  int
+		stopErr error
+		mutex   sync.Mutex
+	)
+	return func() (T, error) {
+		mutex.Lock()
+		defer mutex.Unlock()
+		var empty T
+		if stopErr != nil {
+			return empty, stopErr
+		}
+
+		for cursor < len(iterators) {
+			it := iterators[cursor]
+			v, err := it()
+			if err != nil {
+				if !errors.Is(err, ErrStopIt) {
+					stopErr = err
+					return empty, err
+				} else {
+					cursor++
+					continue
+				}
+			}
+			return v, nil
+		}
+		return empty, ErrStopIt
 	}
 }

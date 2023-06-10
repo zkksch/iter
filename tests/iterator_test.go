@@ -199,6 +199,44 @@ func TestRepeat(t *testing.T) {
 	}
 }
 
+// Tests cycling iterator
+// Repeats values from a given set of values
+func TestCycle(t *testing.T) {
+	cases := []struct {
+		values   []int
+		expected []int
+		limit    int
+	}{
+		{
+			values:   []int{},
+			expected: []int{},
+			limit:    5,
+		},
+		{
+			values:   []int{1},
+			expected: []int{1, 1, 1, 1, 1},
+			limit:    5,
+		},
+		{
+			values:   []int{1, 2, 3},
+			expected: []int{1, 2, 3, 1, 2},
+			limit:    5,
+		},
+	}
+
+	for i, testCase := range cases {
+		it := iter.Cycle(testCase.values...)
+		it = iter.Limit(it, testCase.limit)
+		validateResult(t, i, it, testCase.expected)
+	}
+
+	for i, testCase := range cases {
+		it := iter.CycleSafe(testCase.values...)
+		it = iter.Limit(it, testCase.limit)
+		validateResult(t, i, it, testCase.expected)
+	}
+}
+
 // Tests filter pipe
 // Filters values by using a filter function
 func TestFilter(t *testing.T) {
@@ -478,6 +516,112 @@ func TestCombine(t *testing.T) {
 		}
 		it := iter.CombineSafe(sources...)
 		validateResult(t, i, it, testCase.expected)
+	}
+}
+
+// Tests chain iterator, should combine multiple iterators into one flat iterator
+func TestChain(t *testing.T) {
+	cases := []struct {
+		sources  [][]int
+		expected []int
+	}{
+		{
+			sources:  [][]int{},
+			expected: []int{},
+		},
+		{
+			sources: [][]int{
+				{0, 1, 2, 3, 4},
+			},
+			expected: []int{0, 1, 2, 3, 4},
+		},
+		{
+			sources: [][]int{
+				{0, 1, 2},
+				{2, 3},
+				{3},
+			},
+			expected: []int{0, 1, 2, 2, 3, 3},
+		},
+	}
+
+	for i, testCase := range cases {
+		sources := make([]iter.Iterator[int], len(testCase.sources))
+		for j, src := range testCase.sources {
+			sources[j] = iter.FromSlice(src)
+		}
+		it := iter.Chain(sources...)
+		validateResult(t, i, it, testCase.expected)
+	}
+
+	for i, testCase := range cases {
+		sources := make([]iter.Iterator[int], len(testCase.sources))
+		for j, src := range testCase.sources {
+			sources[j] = iter.FromSlice(src)
+		}
+		it := iter.ChainSafe(sources...)
+		validateResult(t, i, it, testCase.expected)
+	}
+}
+
+// Tests chain iterator, on error in one of the source iterators
+// should stop iteration and return that error
+func TestChainError(t *testing.T) {
+	newError := errors.New("error")
+	errorIt := func() iter.Iterator[int] {
+		return iter.Map(iter.FromSlice([]int{1, 2, 3, 4}), func(el int) (int, error) {
+			if el == 3 {
+				return 0, newError
+			}
+			return el, nil
+		})
+	}
+	stopIt := func() iter.Iterator[int] {
+		return iter.Map(iter.FromSlice([]int{1, 2, 3, 4}), func(el int) (int, error) {
+			if el == 3 {
+				return 0, iter.ErrStopIt
+			}
+			return el, nil
+		})
+	}
+	expected := []int{1, 2}
+
+	it := iter.Chain(errorIt())
+	_, err := iter.ToSlice(it)
+	if !errors.Is(err, newError) {
+		t.Fatalf("error value is not expected %v != %v\n", err, newError)
+	}
+	_, err = it()
+	if !errors.Is(err, newError) {
+		t.Fatalf("error value is not expected %v != %v\n", err, newError)
+	}
+
+	it = iter.Chain(stopIt())
+	v, err := iter.ToSlice(it)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(v, expected) {
+		t.Fatalf("unexpected value from iterator\n%v != %v\n", v, expected)
+	}
+
+	it = iter.ChainSafe(errorIt())
+	_, err = iter.ToSlice(it)
+	if !errors.Is(err, newError) {
+		t.Fatalf("error value is not expected %v != %v\n", err, newError)
+	}
+	_, err = it()
+	if !errors.Is(err, newError) {
+		t.Fatalf("error value is not expected %v != %v\n", err, newError)
+	}
+
+	it = iter.ChainSafe(stopIt())
+	v, err = iter.ToSlice(it)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(v, expected) {
+		t.Fatalf("unexpected value from iterator\n%v != %v\n", v, expected)
 	}
 }
 

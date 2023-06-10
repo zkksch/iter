@@ -11,7 +11,7 @@ import (
 func FromSlice[T any](source []T) Iterator[T] {
 	cursor := 0
 	return func() (T, error) {
-		if cursor >= len(source) || cursor < 0 {
+		if cursor >= len(source) {
 			var empty T
 			return empty, ErrStopIt
 		}

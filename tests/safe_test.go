@@ -75,7 +75,7 @@ func iterateCheck[T any](goroutines int, it iter.Iterator[T], check func(T) bool
 			defer wg.Done()
 			<-start
 			a := 0
-			for val, err := it(); err == nil; _, err = it() {
+			for val, err := it(); err == nil; val, err = it() {
 				a++
 				if !check(val) {
 					failed.Store(true)
@@ -105,11 +105,7 @@ func TestSafeFromSliceSafe(t *testing.T) {
 
 // Tests sequence iterator, checks that after N iterations the next element of iterator will be N
 func TestSafeSequenceSafe(t *testing.T) {
-	if elements%goroutines != 0 {
-		t.Fatalf(
-			"Number of elements (%v) should be divisible by number of goroutines (%v)\n",
-			elements, goroutines)
-	}
+	elements := (elements / goroutines) * goroutines
 	it := iter.SequenceSafe(0, 1)
 	k := iterateN(goroutines, it, elements/goroutines)
 	if k != elements {
@@ -121,6 +117,31 @@ func TestSafeSequenceSafe(t *testing.T) {
 	}
 	if next != elements {
 		t.Fatalf("wrong next element %v != %v\n", next, elements)
+	}
+}
+
+// Tests cycling iterator, checks that after N iterations (N divisible by amount of values)
+// it returned the same amount of each value from the set
+func TestSafeCycleSafe(t *testing.T) {
+	elements := (elements / 10) * 10
+	it := iter.CycleSafe(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+	it = iter.LimitSafe(it, elements)
+	counters := []*atomic.Int32{{}, {}, {}, {}, {}, {}, {}, {}, {}, {}}
+	k, _ := iterateCheck(goroutines, it, func(el int) bool {
+		counters[el].Add(1)
+		return true
+	})
+	if k != elements {
+		t.Fatalf("wrong number of iterations %v != %v\n", elements, k)
+	}
+	countersVerbose := make([]int, 10)
+	for i, c := range counters {
+		countersVerbose[i] = int(c.Load())
+	}
+	for i := 1; i < 10; i++ {
+		if countersVerbose[i-1] != countersVerbose[i] {
+			t.Fatalf("cycle repeated each element unevenly\n%v\n", countersVerbose)
+		}
 	}
 }
 
@@ -191,6 +212,24 @@ func TestSafeCombineSafe(t *testing.T) {
 	if failed {
 		t.Fatalf("Groups are not synchronized")
 	}
+	if k != elements {
+		t.Fatalf("wrong number of iterations %v != %v\n", elements, k)
+	}
+}
+
+// Tests that amount of iterations in chain will be equal
+// to total amount of iterations in iterators used in chain
+func TestSafeChainSafe(t *testing.T) {
+	elements := (elements / 10) * 10
+	gen := iter.Generator(func() int { return 0 })
+	sources := make([]iter.Iterator[int], 10)
+	for i := 0; i < 10; i++ {
+		// Source also should be thread safe
+		sources[i] = iter.LimitSafe(gen, elements/10)
+	}
+
+	it := iter.ChainSafe(sources...)
+	k := iterateAll(goroutines, it)
 	if k != elements {
 		t.Fatalf("wrong number of iterations %v != %v\n", elements, k)
 	}
